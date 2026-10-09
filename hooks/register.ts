@@ -12,10 +12,26 @@ set {{sx, sy}, {sw, sh}} to current application's NSScreen's mainScreen's frame(
 set x to sx + (sw - 420) div 2
 set y to (sh - 760) div 2
 tell application "Safari"
+  set existing to id of every window
   make new document with properties {URL:"https://www.instagram.com/reels/"}
-  set w to front window
+  -- find our window as the new one on Instagram: right after creation \`front window\` can still be one of yours
+  set w to missing value
+  repeat 50 times
+    repeat with o in (every window)
+      if (id of o) is not in existing and (URL of current tab of o as text) contains "instagram.com" then set w to contents of o
+    end repeat
+    if w is not missing value then exit repeat
+    delay 0.1
+  end repeat
   set bounds of w to {x, y, x + 420, y + 760}
   set wid to id of w
+  -- Safari can still open its Start Page a moment after starting; close it so only Reels shows
+  if not wasRunning then
+    delay 1
+    repeat with o in (every window whose id is not wid)
+      if (URL of current tab of o as text) is in {"favorites://", "about:blank", "missing value"} then close o
+    end repeat
+  end if
 end tell
 -- not \`activate\`: that raises every Safari window over Claude; this raises only the new (key) one
 tell application "System Events" to set frontmost of process "Safari" to true
@@ -31,12 +47,25 @@ const CLOSE = `on run argv
   -- read before closing: are you still watching, or have you moved on to something else?
   tell application "System Events" to set stillWatching to frontmost of process "Safari"
   tell application "Safari"
-    close (every window whose id is (item 1 of argv as integer))
-    -- we started Safari, so quit it, but only if that leaves none of your windows behind
-    if item 3 of argv is "false" and (count of windows) is 0 then quit
+    -- we started Safari: quit it unless you have a real page open (decided before closing: closes settle late)
+    set yours to 0
+    if item 3 of argv is "false" then
+      repeat with o in (every window whose id is not (item 1 of argv as integer))
+        if (URL of current tab of o as text) is not in {"favorites://", "about:blank", "missing value"} then set yours to yours + 1
+      end repeat
+    end if
+    if item 3 of argv is "false" and yours is 0 then
+      quit
+    else
+      close (every window whose id is (item 1 of argv as integer))
+    end if
   end tell
   if stillWatching then tell application (item 2 of argv) to activate
 end run`
+
+// DEBUG (temporary)
+const dbg = ($: any, msg: string) =>
+  $.process.run(['/bin/sh', '-c', 'printf "%s %s\\n" "$(date +%T)" "$1" >> "$2"', 'sh', '[installed] ' + msg, '/private/tmp/claude-501/-Users-jasonemsleymac-Desktop-Personal-Projects-agentic-workflow-max/240fd88b-ea94-4923-a36b-a9801067f33d/scratchpad/reels.log']).catch(() => {})
 
 export const register: Register = on => {
   // the open in flight, resolving to [windowId, prevApp, wasRunning]; awaited at turn end so a short turn can't miss it
@@ -55,9 +84,11 @@ export const register: Register = on => {
   })
 
   on('prompt.submit', async ($, e, next) => {
+    void dbg($, `prompt.submit opening=${!!opening} off=${await $.store.get('off')}`)
     // shortcut: skips every slash command (they may never end a turn, which would strand the window); skills invoked by slash won't get reels
     if (!opening && !e.text.startsWith('/') && !(await $.store.get('off'))) {
       opening = $.process.run(['osascript', '-e', OPEN]).then(opened => {
+        void dbg($, `opened exit=${opened.exitCode} out=${opened.stdout.trim().replace(/\n/g, '|')} err=${opened.stderr.trim()}`)
         if (opened.exitCode === 0) return opened.stdout.trim().split('\n')
         $.ui.toast(`reels: ${opened.stderr.trim()}`)
       }).catch(err => void $.ui.toast(`reels: ${err}`))
@@ -67,6 +98,7 @@ export const register: Register = on => {
         await $.clock.sleep(5000) // let Instagram's page mount its <video>s
         if (opening !== mine) return
         const injected = await $.process.run(['osascript', '-e', INJECT, win[0], AUTOSCROLL_JS])
+        void dbg($, `injected exit=${injected.exitCode} err=${injected.stderr.trim()}`)
         if (injected.exitCode !== 0)
           $.ui.toast('reels: autoscroll needs Safari → Settings → Developer → Allow JavaScript from Apple Events')
       }).catch(() => {}) // the window may already be closed when a turn is short
@@ -75,11 +107,13 @@ export const register: Register = on => {
   }).catch(($, e, next) => next(e)) // never block your prompt over a reels hiccup
 
   on('turn.complete', async ($, e, next) => {
+    void dbg($, `turn.complete agentId=${e.agentId} reason=${(e as any).reason} opening=${!!opening}`)
     const result = await next(e)
     if (!e.agentId && opening) {
       const win = await opening
       opening = undefined
-      if (win) await $.process.run(['osascript', '-e', CLOSE, ...win]).catch(() => {})
+      const closed = win && await $.process.run(['osascript', '-e', CLOSE, ...win]).catch(err => ({ exitCode: -1, stderr: String(err) }))
+      void dbg($, `closed win=${win?.join('|')} exit=${closed && closed.exitCode} err=${closed && closed.stderr.trim()}`)
     }
     return result
   })
