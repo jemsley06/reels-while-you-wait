@@ -5,6 +5,8 @@ const OPEN = `use framework "AppKit"
 use scripting additions
 set prev to path to frontmost application as text
 set wasRunning to application "Safari" is running
+-- \`launch\` starts Safari without the Start Page window a plain start opens
+if not wasRunning then tell application "Safari" to launch
 -- the screen holding the focused window; center a phone-sized 420x760 window on it
 set {{sx, sy}, {sw, sh}} to current application's NSScreen's mainScreen's frame() as list
 set x to sx + (sw - 420) div 2
