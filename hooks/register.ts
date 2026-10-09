@@ -21,19 +21,20 @@ end tell
 tell application "System Events" to set frontmost of process "Safari" to true
 return (wid as text) & linefeed & prev & linefeed & wasRunning`
 
+// every step checks Safari is running first: a \`tell\` to a quit Safari relaunches it, restoring old windows
 const INJECT = `on run argv
-  tell application "Safari" to do JavaScript (item 2 of argv) in current tab of (first window whose id is (item 1 of argv as integer))
+  if application "Safari" is running then tell application "Safari" to do JavaScript (item 2 of argv) in current tab of (first window whose id is (item 1 of argv as integer))
 end run`
 
 const CLOSE = `on run argv
-  -- we launched Safari, so quit it: that also clears the Start Page window Safari opens on launch
-  if item 3 of argv is "false" then
-    tell application "Safari" to quit
-  else
-    tell application "Safari" to close (every window whose id is (item 1 of argv as integer))
-  end if
-  -- hand focus back to the app you were in, unless you've since moved on to something else
+  if not (application "Safari" is running) then return
+  -- read before closing: are you still watching, or have you moved on to something else?
   tell application "System Events" to set stillWatching to frontmost of process "Safari"
+  tell application "Safari"
+    close (every window whose id is (item 1 of argv as integer))
+    -- we started Safari, so quit it, but only if that leaves none of your windows behind
+    if item 3 of argv is "false" and (count of windows) is 0 then quit
+  end tell
   if stillWatching then tell application (item 2 of argv) to activate
 end run`
 
@@ -62,7 +63,7 @@ export const register: Register = on => {
       }).catch(err => void $.ui.toast(`reels: ${err}`))
       const mine = opening
       void opening.then(async win => {
-        if (!win || opening !== mine) return // turn already ended: injecting now would relaunch a quit Safari
+        if (!win || opening !== mine) return // turn already ended
         await $.clock.sleep(5000) // let Instagram's page mount its <video>s
         if (opening !== mine) return
         const injected = await $.process.run(['osascript', '-e', INJECT, win[0], AUTOSCROLL_JS])
