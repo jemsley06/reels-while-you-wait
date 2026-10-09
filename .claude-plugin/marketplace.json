@@ -1,0 +1,5 @@
+{
+  "name": "reels-while-you-wait",
+  "owner": { "name": "jemsley06" },
+  "plugins": [{ "name": "reels-while-you-wait", "source": "./" }]
+}
