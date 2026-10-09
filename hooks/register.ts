@@ -34,8 +34,20 @@ export const register: Register = on => {
   let windowId: string | undefined
   let prevApp = ''
 
-  on('prompt.submit', ($, e, next) => {
-    if (!windowId) {
+  on('session.start', async ($, e, next) => {
+    await $.command.register({ name: 'reels', description: 'Turn Reels-while-you-wait on or off' })
+    return next(e)
+  })
+
+  on('command.run', { command: 'reels' }, async $ => {
+    const isOff = !(await $.store.get('off'))
+    await $.store.set('off', isOff)
+    return { text: `Reels while you wait: ${isOff ? 'off' : 'on'}` }
+  })
+
+  on('prompt.submit', async ($, e, next) => {
+    // shortcut: skips every slash command (they may never end a turn, which would strand the window); skills invoked by slash won't get reels
+    if (!windowId && !e.text.startsWith('/') && !(await $.store.get('off'))) {
       void (async () => {
         const opened = await $.process.run(['osascript', '-e', OPEN])
         if (opened.exitCode !== 0) return $.ui.toast(`reels: ${opened.stderr.trim()}`)

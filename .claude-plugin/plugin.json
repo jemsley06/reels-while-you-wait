@@ -1,6 +1,6 @@
 {
   "name": "reels-while-you-wait",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Opens Instagram Reels in a small centered Safari window while Claude works, autoscrolls, and closes it when Claude finishes.",
   "author": { "name": "jemsley06" }
 }

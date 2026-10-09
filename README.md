@@ -18,7 +18,13 @@ Answer `y` to add the marketplace, then press Enter for the user scope.
 2. **Instagram:** log in to Instagram in Safari.
 3. **macOS permissions:** the first run asks to let Claude control Safari and System Events. Allow both.
 
+## Turning it on and off
+
+Type `/reels` to toggle it. Your choice is remembered across sessions.
+
 ## Notes
+
+- Prompts that start with `/` (slash commands) never open Reels.
 
 - If Claude is in macOS full-screen mode, the Reels window can't float over it; use a normal window.
 - The window is a fixed 420×760, centered on the screen you're working on.
