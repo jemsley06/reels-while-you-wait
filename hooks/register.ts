@@ -5,6 +5,8 @@ const OPEN = `use framework "AppKit"
 use scripting additions
 set prev to path to frontmost application as text
 set wasRunning to application "Safari" is running
+-- running with no windows holds nothing of yours: treat it as ours to quit afterwards
+if wasRunning then tell application "Safari" to if (count of windows) is 0 then set wasRunning to false
 -- \`launch\` starts Safari without the Start Page window a plain start opens
 if not wasRunning then tell application "Safari" to launch
 -- the screen holding the focused window; center a phone-sized 420x760 window on it
